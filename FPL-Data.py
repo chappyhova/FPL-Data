@@ -19,11 +19,11 @@ bps_pm = (fpl_final['bps'] / fpl_final['minutes']) * 100
 fpl_final['bonus_points'] = bps_pm
 fpl_final['value'] = value
 
-top_six = fpl_final['team'].isin([1, 5, 7, 10, 11, 12, 17, 20])
-
 fpl_final = fpl_final[
     ['value', 'first_name', 'second_name', 'minutes', 'price', 'total_points', 'bonus_points', 'position', 'threat',
-     'creativity']]
+     'creativity', 'team' ]]
+
+#top_six = fpl_final['team'].isin([1, 4, 5, 9, 11, 12, 16, 17])
 
 fpl_final = fpl_final.sort_values('value', ascending=False)
 
@@ -33,9 +33,15 @@ fpl_final['position'] = fpl_final['position'].str.replace('1', 'Goalkeeper').rep
                                                                                                               'Midfielder').replace(
     '4', 'Striker')
 
-results = (fpl_final.loc[(fpl_final['minutes'] > 600) & (fpl_final['value'] > 7)])
+fpl_final['team'] = (fpl_final['team'].replace([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+                                               ['Arsenal', 'Bournemouth', 'Brighton', 'Burnley', 'Chelsea',
+                                                'Crystal Palace', 'Everton', 'Huddersfield', 'Leicester', 'Liverpool',
+                                                'Man City', 'Man Utd', 'Newcastle', 'Southampton', 'Stoke', 'Swansea',
+                                                'Spurs', 'Watford', 'West Brom', 'West Ham']))
 
-writer = pd.ExcelWriter('C:/Users/chapp/Google Drive/FPLnew.xlsx', engine='xlsxwriter')
+results = (fpl_final.loc[(fpl_final['minutes'] > 400) & (fpl_final['value'] > 5)])
+
+writer = pd.ExcelWriter('C:/Users/Chappy/Google Drive/FPLnew.xlsx', engine='xlsxwriter')
 results.to_excel(writer, index=False, sheet_name='report')
 workbook = writer.book
 worksheet = writer.sheets['report']
@@ -120,5 +126,6 @@ worksheet.set_column(4, 4, 12, price_format)
 worksheet.set_column(6, 6, 14, value_format)
 worksheet.set_column(7, 7, 14)
 worksheet.set_column(8, 9, 8)
+worksheet.set_column(10, 10, 8)
 
 workbook.close()

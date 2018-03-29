@@ -4,55 +4,90 @@ import re
 from xlsxwriter.utility import xl_rowcol_to_cell
 from tkinter import *
 import json
+import time
+import aiohttp
+import asyncio
+import aiofiles
 
 from pip._vendor import requests
 
-fplData = requests.get('https://fantasy.premierleague.com/drf/bootstrap-static').json()
-fplData = pd.DataFrame(fplData['elements'])
-numberOfPlayers = (len(fplData['id']))
+if __name__ == '__main__':
+    player_link = 'https://fantasy.premierleague.com/drf/element-summary/'
+    fplData = requests.get('https://fantasy.premierleague.com/drf/bootstrap-static').json()
+    fplData = pd.DataFrame(fplData['elements'])
+    print(fplData['id'])
+    numberOfPlayers = (len(fplData['id']))
+    print(numberOfPlayers)
+    URL_LIST = []
+    player_dict = {}
 
-playerDict = {}
-player = 1
-while player <= numberOfPlayers:
-    playerJson = requests.get('https://fantasy.premierleague.com/drf/element-summary/' + str(player)).json()
-    print(player)
-    playerJson = pd.DataFrame(playerJson['history'])
-    playerJson['first_name'] = (fplData.loc[player - 1]['first_name'])
-    playerJson['second_name'] = (fplData.loc[player - 1]['second_name'])
-    playerJson['cost'] = (fplData.loc[player - 1]['now_cost'])
-    playerJson['position'] = (fplData.loc[player - 1]['element_type'])
-    playerJson['position'] = playerJson['position'].astype(str)
-    playerJson['creativity'] = playerJson['creativity'].astype(float)
-    playerJson['threat'] = playerJson['threat'].astype(float)
-    playerDict[player] = playerJson
-    player += 1
+for i in range(1, numberOfPlayers+1):
+    player_address = player_link+str(i)
+    URL_LIST.append(player_address)
 
-for item, value in playerDict.items():
-    value['points'] = value.loc[value['round'] > 20, 'total_points'].sum()
-    value['minutes'] = value.loc[value['round'] > 20, 'minutes'].sum()
-    value['threat'] = value.loc[value['round'] > 20, 'threat'].sum()
-    value['creativity'] = value.loc[value['round'] > 20, 'creativity'].sum()
-    playerValue = (value['points'] / value['minutes']) / value['cost'] * 10000
-    value['value'] = playerValue
 
-newPlayerDict = {}
-player2 = 1
-for item, value in playerDict.items():
-    value = value.iloc[[0]]
-    newPlayerDict[player2] = value
-    player2 += 1
+async def get_players():
+    counter = 1
+    async with aiohttp.ClientSession() as session:
+        for player in URL_LIST:
+            async with session.get(player) as resp:
+                data = await resp.json()
+                data = pd.DataFrame(data['history'])
+                player_id = fplData.loc[fplData['id'] == counter]
+                data['first_name'] = player_id['first_name']
+                surname = data['second_name'] = player_id['second_name']
+                print(surname)
+                data['cost'] = player_id['now_cost']
+                data['position'] = player_id['element_type']
+                data['position'] = data['position'].astype(str)
+                data['creativity'] = data['creativity'].astype(float)
+                data['threat'] = data['threat'].astype(float)
+                player_dict[counter] = data
+                print(counter)
+                counter += 1
+    return player_dict
 
-concatDf = pd.concat(newPlayerDict)
+
+def sort_players():
+    for player, val in player_dict.items():
+        val['points'] = val.loc[val['round'] > 10, 'total_points'].sum()
+        val['minutes'] = val.loc[val['round'] > 10, 'minutes'].sum()
+        val['threat'] = val.loc[val['round'] > 10, 'threat'].sum()
+        val['creativity'] = val.loc[val['round'] > 10, 'creativity'].sum()
+        player_value = (val['points'] / val['minutes']) / val['cost'] * 10000
+        val['value'] = player_value
+    return player_dict
+
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(get_players())
+loop.close()
+
+new_player_dict = {}
+
+
+def not_sure(fpl_dict):
+    player = 1
+    for item, value in fpl_dict.items():
+        value = value.iloc[[0]]
+        new_player_dict[player] = value
+        player += 1
+
+
+not_sure(sort_players())
+print(new_player_dict)
+
+concatDf = pd.concat(new_player_dict)
 concatDf = concatDf[
     ['value', 'first_name', 'second_name', 'minutes', 'cost', 'points', 'bps', 'position', 'threat', 'creativity']]
 
 # Changing element types to positions
 
 concatDf['position'] = concatDf['position'].str.replace('1', 'Goalkeeper').replace('2', 'Defender').replace('3',
-                                                                                                              'Midfielder').replace(
-        '4', 'Striker')
+                                                                                                            'Midfielder').replace(
+    '4', 'Striker')
 
-finalDF = (concatDf.loc[(concatDf['minutes'] > 300) & (concatDf['value'] > 7)])
+finalDF = (concatDf.loc[(concatDf['minutes'] > 1) & (concatDf['value'] > 4)])
 
 writer = pd.ExcelWriter('C:/Users/chapp/Google Drive/FPLform.xlsx', engine='xlsxwriter')
 finalDF.to_excel(writer, index=False, sheet_name='report')
